@@ -2,6 +2,7 @@
 
 #include "../include/api_assembler.h"
 #include "../include/elf_emit.h"
+#include "../include/second_pass.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,7 +93,7 @@ int main(int argc, char** argv) {
   int rc = write_elf_file(program, output);
   int err = errno;
   free_assembled_program(program);
-  if (rc != 0) {
+  if (!rc) {
     if (err != 0)
       fprintf(stderr, "%s: error: failed to write '%s': %s\n", prog_name, output, strerror(err));
     else

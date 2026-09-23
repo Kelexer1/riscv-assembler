@@ -4,6 +4,7 @@
 #include "../include/lexer.h"
 #include "../include/logger.h"
 #include "../include/parser.h"
+#include "../include/second_pass.h"
 #include <stddef.h>
 #include <stdlib.h>
 

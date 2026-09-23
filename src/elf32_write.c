@@ -78,7 +78,7 @@ int elf32_write(const char* path, const Elf32OutImage* img) {
   const size_t strtab_idx = ns + 2;
   const size_t shstrtab_idx = ns + 3;
 
-  int rc = -1;
+  int rc = 0;
   int opened = 0;
   StrTab shstr = {0};
   StrTab str = {0};
@@ -243,7 +243,7 @@ int elf32_write(const char* path, const Elf32OutImage* img) {
 done:
   if (o.f)
     fclose(o.f);
-  if (rc != 0 && opened)
+  if (rc == 0 && opened)
     remove(path);
   free(shstr.buf);
   free(str.buf);

@@ -349,17 +349,19 @@ static void free_token_list(Token* head) {
 }
 
 /**
- * @brief Tokenizes a single line of an assembly program
+ * @brief Tokenizes a single physical line of an assembly program, pushing one token list
+ * per ';'-separated statement onto lines
  *
  * @param arena The arena to allocate tokens' owned text-representations from
+ * @param lines The output array of per-statement token lists to push onto
  * @param line The line of assembly as a character array
  * @param line_len The number of characters in the line
  * @param line_number The line number
  * @param had_error Set to 1 if tokenization failed, 0 on success
- * @return Token* The head of a linked list of tokens encoding the line, NULL if the line was
- * empty or an error occurred
+ * @return int 1 on success, 0 if an error occurred
  */
-static Token* tokenize_line(Arena* arena, const char* line, size_t line_len, uint32_t line_number, int* had_error) {
+static int tokenize_line(Arena* arena, DynamicArray* lines, const char* line, size_t line_len, uint32_t line_number,
+                         int* had_error) {
   Token* head = NULL;
   Token* tail = NULL;
   const char* ptr = line;
@@ -374,6 +376,17 @@ static Token* tokenize_line(Arena* arena, const char* line, size_t line_len, uin
 
     if (ptr >= end || *ptr == '#')
       break;
+
+    if (*ptr == ';') {
+      if (head && !dynamic_array_push(lines, &head)) {
+        LOG_ERROR_LOCATION("Failed to record statement", line_number, (uint32_t)(ptr - line) + 1);
+        goto fail;
+      }
+      head = NULL;
+      tail = NULL;
+      ptr++;
+      continue;
+    }
 
     if (*ptr == ',' || *ptr == '(' || *ptr == ')') {
       col = (uint32_t)(ptr - line) + 1;
@@ -424,7 +437,8 @@ static Token* tokenize_line(Arena* arena, const char* line, size_t line_len, uin
 
     start = ptr;
     col = (uint32_t)(ptr - line) + 1;
-    while (ptr < end && *ptr != ' ' && *ptr != '\t' && *ptr != ',' && *ptr != '(' && *ptr != ')' && *ptr != '#')
+    while (ptr < end && *ptr != ' ' && *ptr != '\t' && *ptr != ',' && *ptr != '(' && *ptr != ')' && *ptr != '#' &&
+           *ptr != ';')
       ptr++;
     size_t len = ptr - start;
     if (len == 0)
@@ -460,15 +474,20 @@ static Token* tokenize_line(Arena* arena, const char* line, size_t line_len, uin
 
 #undef COL
 
+  if (head && !dynamic_array_push(lines, &head)) {
+    LOG_ERROR_LOCATION("Failed to record statement", line_number, (uint32_t)(end - line) + 1);
+    goto fail;
+  }
+
   if (had_error)
     *had_error = 0;
-  return head;
+  return 1;
 
 fail:
   free_token_list(head);
   if (had_error)
     *had_error = 1;
-  return NULL;
+  return 0;
 }
 
 TokenizedInput* tokenize_input(const char* src) {
@@ -495,15 +514,11 @@ TokenizedInput* tokenize_input(const char* src) {
   uint32_t line_num = 1;
   int line_had_error = 0;
 
-  Token* tokens;
   while (cursor != NULL && *cursor != '\0') {
     if (*cursor == '\n') {
       size_t len = (size_t)(cursor - line_start);
       if (len > 0) {
-        tokens = tokenize_line(&result->arena, line_start, len, line_num, &line_had_error);
-        if (line_had_error)
-          goto fail;
-        if (tokens && !dynamic_array_push(&lines, &tokens))
+        if (!tokenize_line(&result->arena, &lines, line_start, len, line_num, &line_had_error))
           goto fail;
       }
       line_num++;
@@ -515,10 +530,7 @@ TokenizedInput* tokenize_input(const char* src) {
   if (cursor != line_start) {
     size_t len = (size_t)(cursor - line_start);
     if (len > 0) {
-      tokens = tokenize_line(&result->arena, line_start, len, line_num, &line_had_error);
-      if (line_had_error)
-        goto fail;
-      if (tokens && !dynamic_array_push(&lines, &tokens))
+      if (!tokenize_line(&result->arena, &lines, line_start, len, line_num, &line_had_error))
         goto fail;
     }
   }
