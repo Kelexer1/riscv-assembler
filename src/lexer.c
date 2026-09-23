@@ -164,11 +164,11 @@ static int is_valid_immediate(const char* start, size_t len, int* out) {
 
   if (len >= 3 && start[0] == '0' && start[1] == 'x') {
     errno = 0;
-    long hex = strtol(start + 2, &end, 16);
+    unsigned long hex = strtoul(start + 2, &end, 16);
     if (end == start + len) {
-      if (errno == ERANGE || hex < INT32_MIN || hex > INT32_MAX)
+      if (errno == ERANGE || hex > 0xFFFFFFFFUL)
         return 0;
-      *out = (int)hex;
+      *out = (int)(uint32_t)hex;
       return 1;
     }
   }
