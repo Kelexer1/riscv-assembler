@@ -477,6 +477,123 @@ void test_tokenize_line_unknown_token_should_not_be_silently_accepted(void) {
   TEST_ASSERT_EQUAL_INT(1, had_error);
 }
 
+void test_tokenize_line_semicolon_splits_statements_no_whitespace(void) {
+  const char* line = "add a0, a1, a2;sub a0, a1, a2";
+  DynamicArray lines = {0};
+  int had_error = -1;
+  TEST_ASSERT_TRUE(dynamic_array_init(&lines, sizeof(Token*), 4));
+
+  int rc = tokenize_line(&arena, &lines, line, strlen(line), 1, &had_error);
+
+  TEST_ASSERT_EQUAL_INT(0, rc);
+  TEST_ASSERT_EQUAL_INT(0, had_error);
+  TEST_ASSERT_EQUAL_UINT(2, lines.count);
+
+  Token* first = ((Token**)lines.data)[0];
+  TEST_ASSERT_EQUAL(TOKEN_MNEMONIC, first->type);
+  TEST_ASSERT_EQUAL(OP_ADD, first->opcode.op);
+  int first_len = 0;
+  for (Token* t = first; t; t = t->next)
+    first_len++;
+  TEST_ASSERT_EQUAL_INT(6, first_len);
+
+  Token* second = ((Token**)lines.data)[1];
+  TEST_ASSERT_EQUAL(TOKEN_MNEMONIC, second->type);
+  TEST_ASSERT_EQUAL(OP_SUB, second->opcode.op);
+  TEST_ASSERT_EQUAL_UINT32(16, second->col);
+  int second_len = 0;
+  for (Token* t = second; t; t = t->next)
+    second_len++;
+  TEST_ASSERT_EQUAL_INT(6, second_len);
+
+  free_token_list(first);
+  free_token_list(second);
+  dynamic_array_free(&lines);
+}
+
+void test_tokenize_line_semicolon_splits_pseudo_statements(void) {
+  const char* line = "li a0, 4;li a0, 9";
+  DynamicArray lines = {0};
+  int had_error = -1;
+  TEST_ASSERT_TRUE(dynamic_array_init(&lines, sizeof(Token*), 4));
+
+  int rc = tokenize_line(&arena, &lines, line, strlen(line), 1, &had_error);
+
+  TEST_ASSERT_EQUAL_INT(0, rc);
+  TEST_ASSERT_EQUAL_INT(0, had_error);
+  TEST_ASSERT_EQUAL_UINT(2, lines.count);
+
+  Token* first = ((Token**)lines.data)[0];
+  TEST_ASSERT_EQUAL(TOKEN_PSEUDO, first->type);
+  Token* t = first->next;
+  TEST_ASSERT_EQUAL(TOKEN_REGISTER, t->type);
+  TEST_ASSERT_EQUAL_INT(10, t->reg);
+  t = t->next;
+  TEST_ASSERT_EQUAL(TOKEN_COMMA, t->type);
+  t = t->next;
+  TEST_ASSERT_EQUAL(TOKEN_IMMEDIATE, t->type);
+  TEST_ASSERT_EQUAL_INT(4, t->imm);
+  TEST_ASSERT_NULL(t->next);
+
+  Token* second = ((Token**)lines.data)[1];
+  TEST_ASSERT_EQUAL(TOKEN_PSEUDO, second->type);
+  t = second->next;
+  TEST_ASSERT_EQUAL(TOKEN_REGISTER, t->type);
+  TEST_ASSERT_EQUAL_INT(10, t->reg);
+  t = t->next;
+  TEST_ASSERT_EQUAL(TOKEN_COMMA, t->type);
+  t = t->next;
+  TEST_ASSERT_EQUAL(TOKEN_IMMEDIATE, t->type);
+  TEST_ASSERT_EQUAL_INT(9, t->imm);
+  TEST_ASSERT_NULL(t->next);
+
+  free_token_list(first);
+  free_token_list(second);
+  dynamic_array_free(&lines);
+}
+
+void test_tokenize_line_trailing_semicolon_no_extra_statement(void) {
+  const char* line = "add a0, a1, a2;";
+  DynamicArray lines = {0};
+  int had_error = -1;
+  TEST_ASSERT_TRUE(dynamic_array_init(&lines, sizeof(Token*), 4));
+
+  int rc = tokenize_line(&arena, &lines, line, strlen(line), 1, &had_error);
+
+  TEST_ASSERT_EQUAL_INT(0, rc);
+  TEST_ASSERT_EQUAL_INT(0, had_error);
+  TEST_ASSERT_EQUAL_UINT(1, lines.count);
+
+  Token* head = ((Token**)lines.data)[0];
+  TEST_ASSERT_EQUAL(TOKEN_MNEMONIC, head->type);
+  TEST_ASSERT_EQUAL(OP_ADD, head->opcode.op);
+
+  free_token_list(head);
+  dynamic_array_free(&lines);
+}
+
+void test_tokenize_line_consecutive_semicolons_no_empty_statement(void) {
+  const char* line = "add a0, a1, a2;;sub a0, a1, a2";
+  DynamicArray lines = {0};
+  int had_error = -1;
+  TEST_ASSERT_TRUE(dynamic_array_init(&lines, sizeof(Token*), 4));
+
+  int rc = tokenize_line(&arena, &lines, line, strlen(line), 1, &had_error);
+
+  TEST_ASSERT_EQUAL_INT(0, rc);
+  TEST_ASSERT_EQUAL_INT(0, had_error);
+  TEST_ASSERT_EQUAL_UINT(2, lines.count);
+
+  Token* first = ((Token**)lines.data)[0];
+  TEST_ASSERT_EQUAL(OP_ADD, first->opcode.op);
+  Token* second = ((Token**)lines.data)[1];
+  TEST_ASSERT_EQUAL(OP_SUB, second->opcode.op);
+
+  free_token_list(first);
+  free_token_list(second);
+  dynamic_array_free(&lines);
+}
+
 /* ---------------------------------------------------------------------
  * tokenize_input / free_tokenized_input
  * ------------------------------------------------------------------- */
@@ -611,6 +728,10 @@ int main(void) {
   RUN_TEST(test_tokenize_line_unterminated_string_fails);
   RUN_TEST(test_tokenize_line_invalid_escape_in_string_fails);
   RUN_TEST(test_tokenize_line_unknown_token_should_not_be_silently_accepted);
+  RUN_TEST(test_tokenize_line_semicolon_splits_statements_no_whitespace);
+  RUN_TEST(test_tokenize_line_semicolon_splits_pseudo_statements);
+  RUN_TEST(test_tokenize_line_trailing_semicolon_no_extra_statement);
+  RUN_TEST(test_tokenize_line_consecutive_semicolons_no_empty_statement);
 
   RUN_TEST(test_tokenize_input_multiple_lines);
   RUN_TEST(test_tokenize_input_no_trailing_newline);
