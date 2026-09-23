@@ -1,4 +1,5 @@
 #include "../include/api_assembler.h"
+#include "../include/second_pass.h"
 #include "unity/unity.h"
 #include <stdlib.h>
 #include <string.h>

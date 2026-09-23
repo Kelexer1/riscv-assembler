@@ -339,21 +339,43 @@ void test_classify_token_unknown(void) {
  * tokenize_line
  * ------------------------------------------------------------------- */
 
+static Token* call_tokenize_line(Arena* arena, const char* line, size_t line_len, uint32_t line_number,
+                                 int* had_error) {
+  DynamicArray lines = {0};
+  if (!dynamic_array_init(&lines, sizeof(Token*), 4)) {
+    if (had_error)
+      *had_error = 1;
+    return NULL;
+  }
+
+  int rc = tokenize_line(arena, &lines, line, line_len, line_number, had_error);
+
+  Token* head = NULL;
+  if (rc == 0 && lines.count > 0)
+    head = ((Token**)lines.data)[0];
+  else
+    for (size_t i = 0; i < lines.count; i++)
+      free_token_list(((Token**)lines.data)[i]);
+
+  dynamic_array_free(&lines);
+  return head;
+}
+
 void test_tokenize_line_blank_returns_null(void) {
   int had_error = 0;
-  TEST_ASSERT_NULL(tokenize_line(&arena, "   ", 3, 1, &had_error));
+  TEST_ASSERT_NULL(call_tokenize_line(&arena, "   ", 3, 1, &had_error));
   TEST_ASSERT_EQUAL_INT(0, had_error);
 }
 
 void test_tokenize_line_comment_only_returns_null(void) {
   int had_error = 0;
-  TEST_ASSERT_NULL(tokenize_line(&arena, "# comment", 9, 1, &had_error));
+  TEST_ASSERT_NULL(call_tokenize_line(&arena, "# comment", 9, 1, &had_error));
   TEST_ASSERT_EQUAL_INT(0, had_error);
 }
 
 void test_tokenize_line_simple_instruction(void) {
   const char* line = "add a0, a1, a2";
-  Token* head = tokenize_line(&arena, line, strlen(line), 1, NULL);
+  Token* head = call_tokenize_line(&arena, line, strlen(line), 1, NULL);
 
   TEST_ASSERT_NOT_NULL(head);
   TEST_ASSERT_EQUAL(TOKEN_MNEMONIC, head->type);
@@ -375,7 +397,7 @@ void test_tokenize_line_simple_instruction(void) {
 
 void test_tokenize_line_label_strips_colon(void) {
   const char* line = "loop:";
-  Token* head = tokenize_line(&arena, line, strlen(line), 1, NULL);
+  Token* head = call_tokenize_line(&arena, line, strlen(line), 1, NULL);
 
   TEST_ASSERT_NOT_NULL(head);
   TEST_ASSERT_EQUAL(TOKEN_LABEL, head->type);
@@ -387,7 +409,7 @@ void test_tokenize_line_label_strips_colon(void) {
 
 void test_tokenize_line_memory_operand_columns(void) {
   const char* line = "lw a0, 4(sp)";
-  Token* head = tokenize_line(&arena, line, strlen(line), 1, NULL);
+  Token* head = call_tokenize_line(&arena, line, strlen(line), 1, NULL);
 
   TEST_ASSERT_NOT_NULL(head);
   /* lw a0 , 4 ( sp ) */
@@ -416,7 +438,7 @@ void test_tokenize_line_memory_operand_columns(void) {
 
 void test_tokenize_line_string_directive(void) {
   const char* line = ".string \"hi\\n\"";
-  Token* head = tokenize_line(&arena, line, strlen(line), 1, NULL);
+  Token* head = call_tokenize_line(&arena, line, strlen(line), 1, NULL);
 
   TEST_ASSERT_NOT_NULL(head);
   TEST_ASSERT_EQUAL(TOKEN_DIRECTIVE, head->type);
@@ -434,21 +456,21 @@ void test_tokenize_line_string_directive(void) {
 void test_tokenize_line_unterminated_string_fails(void) {
   const char* line = ".string \"unterminated";
   int had_error = 0;
-  TEST_ASSERT_NULL(tokenize_line(&arena, line, strlen(line), 1, &had_error));
+  TEST_ASSERT_NULL(call_tokenize_line(&arena, line, strlen(line), 1, &had_error));
   TEST_ASSERT_EQUAL_INT(1, had_error);
 }
 
 void test_tokenize_line_invalid_escape_in_string_fails(void) {
   const char* line = ".string \"bad\\qescape\"";
   int had_error = 0;
-  TEST_ASSERT_NULL(tokenize_line(&arena, line, strlen(line), 1, &had_error));
+  TEST_ASSERT_NULL(call_tokenize_line(&arena, line, strlen(line), 1, &had_error));
   TEST_ASSERT_EQUAL_INT(1, had_error);
 }
 
 void test_tokenize_line_unknown_token_should_not_be_silently_accepted(void) {
   const char* line = "$";
   int had_error = 0;
-  Token* result = tokenize_line(&arena, line, strlen(line), 1, &had_error);
+  Token* result = call_tokenize_line(&arena, line, strlen(line), 1, &had_error);
   if (result)
     free_token_list(result);
   TEST_ASSERT_NULL(result);
